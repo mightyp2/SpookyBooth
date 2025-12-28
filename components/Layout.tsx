@@ -121,7 +121,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLo
       <footer className="p-8 text-center relative z-10 mt-auto">
         <div className="w-full h-px bg-gradient-to-r from-transparent via-purple-900/30 to-transparent mb-6"></div>
         <p className="text-xs text-purple-400/30 font-bold uppercase tracking-[0.3em]">
-          © 2024 Spooky BOOTH • Hand-crafted Magic
+          © 2025 Spooky BOOTH • Haunted by 2025. Seriously… name one person who had a good year. 👻
         </p>
       </footer>
     </div>
