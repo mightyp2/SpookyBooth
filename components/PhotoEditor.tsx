@@ -41,6 +41,14 @@ const STICKER_ASSETS = [
   { type: '🍂', label: 'Dead Leaves' }
 ];
 
+interface Slot {
+  x: number; 
+  y: number; 
+  width: number; 
+  height: number;
+  area: number;
+}
+
 interface PhotoEditorProps {
   images: string[];
   template: Template;
@@ -98,70 +106,196 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
     ctx.drawImage(img, sx, sy, sWidth, sHeight, x, y, w, h);
   };
 
-  // Construct the base collage strip
-  const buildCollage = useCallback(() => {
-    if (!canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  // Lightweight loader so we can await image assets (frames + photos)
+  const loadImage = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = (e) => reject(e);
+      img.src = src;
+    });
 
-    const layout = template.layout || 'strip';
-    const gap = 50;
-    const headH = 160;
-    const footH = 220;
-    
-    let cw = 700;
-    let ch = 1000;
-
-    // Sizing logic based on the strip style
-    if (layout === 'strip') {
-      cw = 700;
-      const pw = cw - (gap * 2);
-      const ph = pw * 0.75;
-      ch = headH + footH + (images.length * ph) + ((images.length - 1) * gap);
-    } else if (layout === 'grid') {
-      cw = 1100;
-      const pw = (cw - (gap * 3)) / 2;
-      const ph = pw * 0.75;
-      const rows = Math.ceil(images.length / 2);
-      ch = headH + footH + (rows * ph) + ((rows - 1) * gap);
-    } else {
-      cw = 900;
-      ch = 1000;
+  // Auto-detect transparent holes in a PNG frame so photos sit behind the cutouts
+  const detectTransparentSlots = (img: HTMLImageElement): Slot[] => {
+    const maxDim = 800;
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const dw = Math.max(1, Math.round(img.width * scale));
+    const dh = Math.max(1, Math.round(img.height * scale));
+    const c = document.createElement('canvas');
+    c.width = dw;
+    c.height = dh;
+    const ctx = c.getContext('2d');
+    if (!ctx) return [];
+    ctx.drawImage(img, 0, 0, dw, dh);
+    const data = ctx.getImageData(0, 0, dw, dh).data;
+    const visited = new Uint8Array(dw * dh);
+    const mask = new Uint8Array(dw * dh);
+    const alphaThreshold = 10; // transparent if almost fully see-through
+    for (let i = 0; i < dw * dh; i++) {
+      mask[i] = data[i * 4 + 3] < alphaThreshold ? 1 : 0;
     }
 
-    canvas.width = cw;
-    canvas.height = ch;
+    const slots: Slot[] = [];
+    const neighbors = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1]
+    ];
 
-    // Background gradient for the strip itself
-    const grad = ctx.createLinearGradient(0, 0, 0, ch);
-    grad.addColorStop(0, '#1a1c2c'); 
-    grad.addColorStop(1, '#0c0d15');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const flood = (sx: number, sy: number) => {
+      const stack = [[sx, sy]];
+      let minX = sx, maxX = sx, minY = sy, maxY = sy, count = 0;
+      visited[sy * dw + sx] = 1;
+      while (stack.length) {
+        const [x, y] = stack.pop() as [number, number];
+        count++;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+        for (const [dx, dy] of neighbors) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= dw || ny >= dh) continue;
+          const idx = ny * dw + nx;
+          if (visited[idx] || mask[idx] === 0) continue;
+          visited[idx] = 1;
+          stack.push([nx, ny]);
+        }
+      }
+      const area = (maxX - minX + 1) * (maxY - minY + 1);
+      return {
+        x: minX / dw,
+        y: minY / dh,
+        width: (maxX - minX + 1) / dw,
+        height: (maxY - minY + 1) / dh,
+        area
+      } as Slot;
+    };
 
-    // Some cute "film strip" holes if it's a multi-photo layout
-    if (layout !== 'single') {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-      for (let y = 30; y < ch; y += 60) {
-        ctx.fillRect(15, y, 15, 25);
-        ctx.fillRect(cw - 30, y, 15, 25);
+    for (let y = 0; y < dh; y++) {
+      for (let x = 0; x < dw; x++) {
+        const idx = y * dw + x;
+        if (visited[idx] || mask[idx] === 0) continue;
+        const slot = flood(x, y);
+        const areaPct = slot.area / (dw * dh);
+        if (areaPct > 0.002) slots.push(slot); // ignore tiny specks
       }
     }
 
-    // Top Brand Text
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 32px "Fredoka One"';
-    ctx.textAlign = 'center';
-    ctx.fillText("SPOOKY CUTE MEMORIES", cw / 2, 90);
+    // Sort slots top-to-bottom then left-to-right for consistent ordering
+    return slots.sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
+  };
 
-    // Load and place the photos
-    let readyCount = 0;
-    const finalImages = layout === 'single' ? [images[0]] : images;
+  // Construct the base collage strip
+  const buildCollage = useCallback(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!canvasRef.current) return;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    finalImages.forEach((src, idx) => {
-      const img = new Image();
-      img.onload = () => {
+      // Try PNG frame mode first (auto-detect holes or use manual slots)
+      if (template.frameUrl) {
+        try {
+          const frameImg = await loadImage(template.frameUrl);
+          const manualSlots = template.slots && template.slots.length > 0 ? template.slots : null;
+          const detectedSlots = manualSlots ? [] : detectTransparentSlots(frameImg);
+          const activeSlots = manualSlots && manualSlots.length > 0 ? manualSlots : detectedSlots;
+
+          if (activeSlots.length > 0) {
+            const maxWidth = 1400;
+            const finalWidth = Math.min(maxWidth, frameImg.width || maxWidth);
+            const scale = finalWidth / frameImg.width;
+            const finalHeight = frameImg.height * scale;
+            canvas.width = finalWidth;
+            canvas.height = finalHeight;
+
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, finalWidth, finalHeight);
+
+            const usableCount = Math.min(activeSlots.length, images.length);
+            const loadedPhotos = await Promise.all(images.slice(0, usableCount).map(loadImage));
+
+            activeSlots.slice(0, loadedPhotos.length).forEach((slot, idx) => {
+              const targetX = slot.x * finalWidth;
+              const targetY = slot.y * finalHeight;
+              const targetW = slot.width * finalWidth;
+              const targetH = slot.height * finalHeight;
+
+              // Clip to an ellipse so the photos respect circular cutouts even if the PNG lacks transparency
+              ctx.save();
+              ctx.beginPath();
+              ctx.ellipse(targetX + targetW / 2, targetY + targetH / 2, targetW / 2, targetH / 2, 0, 0, Math.PI * 2);
+              ctx.clip();
+              drawImageCover(ctx, loadedPhotos[idx], targetX, targetY, targetW, targetH);
+              ctx.restore();
+            });
+
+            // Lay the frame on top so the design sits above the photos
+            ctx.drawImage(frameImg, 0, 0, finalWidth, finalHeight);
+
+            if (!cancelled) setCollageImage(canvas.toDataURL('image/png'));
+            return;
+          }
+        } catch (err) {
+          console.warn('Frame overlay failed, falling back to default layout', err);
+        }
+      }
+
+      // Fallback to the original generated layout
+      const layout = template.layout || 'strip';
+      const gap = 50;
+      const headH = 160;
+      const footH = 220;
+      
+      let cw = 700;
+      let ch = 1000;
+
+      if (layout === 'strip') {
+        cw = 700;
+        const pw = cw - (gap * 2);
+        const ph = pw * 0.75;
+        ch = headH + footH + (images.length * ph) + ((images.length - 1) * gap);
+      } else if (layout === 'grid') {
+        cw = 1100;
+        const pw = (cw - (gap * 3)) / 2;
+        const ph = pw * 0.75;
+        const rows = Math.ceil(images.length / 2);
+        ch = headH + footH + (rows * ph) + ((rows - 1) * gap);
+      } else {
+        cw = 900;
+        ch = 1000;
+      }
+
+      canvas.width = cw;
+      canvas.height = ch;
+
+      const grad = ctx.createLinearGradient(0, 0, 0, ch);
+      grad.addColorStop(0, '#1a1c2c'); 
+      grad.addColorStop(1, '#0c0d15');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (layout !== 'single') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        for (let y = 30; y < ch; y += 60) {
+          ctx.fillRect(15, y, 15, 25);
+          ctx.fillRect(cw - 30, y, 15, 25);
+        }
+      }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 32px "Fredoka One"';
+      ctx.textAlign = 'center';
+      ctx.fillText("SPOOKY CUTE MEMORIES", cw / 2, 90);
+
+      const finalImages = layout === 'single' ? [images[0]] : images;
+      const loadedPhotos = await Promise.all(finalImages.map(loadImage));
+
+      loadedPhotos.forEach((img, idx) => {
         let x = gap, y = headH, w = 0, h = 0;
 
         if (layout === 'strip') {
@@ -183,7 +317,6 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
           y = headH;
         }
 
-        // Draw a clean white frame first
         ctx.save();
         ctx.fillStyle = '#ffffff';
         ctx.shadowColor = 'rgba(0,0,0,0.5)';
@@ -192,28 +325,29 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
         ctx.restore();
 
         drawImageCover(ctx, img, x, y, w, h);
-        
-        readyCount++;
-        if (readyCount === finalImages.length) {
-          // Bottom Theme Text
-          ctx.fillStyle = '#ffffff';
-          ctx.textAlign = 'center';
-          ctx.font = 'bold 50px "Fredoka One"';
-          ctx.fillText(template.themeText, cw / 2, ch - 120);
-          
-          ctx.font = '20px Quicksand';
-          ctx.fillStyle = 'rgba(255,255,255,0.4)';
-          const day = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          ctx.fillText(`BOOTH SNAP • ${day} • ${template.name.toUpperCase()}`, cw / 2, ch - 65);
-          
-          setCollageImage(canvas.toDataURL('image/png'));
-        }
-      };
-      img.src = src;
-    });
+      });
+
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 50px "Fredoka One"';
+      ctx.fillText(template.themeText, cw / 2, ch - 120);
+      
+      ctx.font = '20px Quicksand';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      const day = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      ctx.fillText(`BOOTH SNAP • ${day} • ${template.name.toUpperCase()}`, cw / 2, ch - 65);
+      
+      if (!cancelled) setCollageImage(canvas.toDataURL('image/png'));
+    };
+
+    run();
+    return () => { cancelled = true; };
   }, [images, template]);
 
-  useEffect(() => { buildCollage(); }, [buildCollage]);
+  useEffect(() => {
+    const cleanup = buildCollage();
+    return cleanup;
+  }, [buildCollage]);
 
   const addSticker = (type: string) => {
     soundService.play('pop');

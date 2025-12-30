@@ -73,5 +73,24 @@ export const TEMPLATES: Template[] = [
     icon: '🕷️',
     decorations: ['intricate spider webs', 'cute hanging spiders', 'silver glitter'],
     themeText: 'WEB OF FUN'
+  },
+  {
+    id: 'halloween-circles',
+    name: 'Halloween Circles',
+    photoCount: 3,
+    layout: 'strip',
+    color: 'bg-purple-900',
+    accent: 'border-orange-400',
+    gradient: 'from-purple-900 via-indigo-900 to-black',
+    icon: '🧛',
+    decorations: ['purple gradients', 'orange glow', 'circular frames'],
+    themeText: 'NIGHT TO REMEMBER',
+    frameUrl: '/uploads/halloween design 6.png',
+    // Manual slot positions (normalized): tweak if you adjust the template art
+    slots: [
+      { x: 0.175, y: 0.07, width: 0.65, height: 0.28 },
+      { x: 0.175, y: 0.36, width: 0.65, height: 0.28 },
+      { x: 0.175, y: 0.65, width: 0.65, height: 0.28 }
+    ]
   }
 ];
