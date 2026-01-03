@@ -60,6 +60,15 @@ try {
             db_insert_photo($userId, $url, $timestamp);
             json_response(['success' => true]);
             break;
+        case 'save_public_photo':
+            $userId = (int)($body['user_id'] ?? 0);
+            $url = $body['url'] ?? '';
+            $timestamp = (int)($body['timestamp'] ?? time());
+            if (!$url) json_response(['success' => false, 'error' => 'Missing data']);
+
+            db_insert_photo($userId, $url, $timestamp);
+            json_response(['success' => true]);
+            break;
 
         case 'get_photos':
             $userId = (int)($_GET['user_id'] ?? 0);

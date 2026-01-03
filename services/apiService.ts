@@ -1,8 +1,10 @@
 
 import { SavedPhoto, User } from '../types';
 
-// Use Vite env override when available (set VITE_API_URL=http://localhost:8000/api.php)
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api.php';
+// Prefer explicit env, otherwise use same-origin to avoid mixed-content/ad-block issues
+const API_URL =
+  (import.meta as any).env?.VITE_API_URL ||
+  `${typeof window !== 'undefined' ? window.location.origin : ''}/api.php`;
 
 export const apiService = {
   async register(username: string, password: string): Promise<{ success: boolean; error?: string }> {

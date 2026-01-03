@@ -111,9 +111,9 @@ const Camera: React.FC<CameraProps> = ({ currentPhotoIndex, totalPhotos, onCaptu
       const vh = video.videoHeight;
       const dim = Math.min(vw, vh);
       
-      // We want a nice square snap
-      canvas.width = 800;
-      canvas.height = 800;
+      // We want a nice square snap with a bit more resolution for quality overlays
+      canvas.width = 1200;
+      canvas.height = 1200;
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -133,10 +133,23 @@ const Camera: React.FC<CameraProps> = ({ currentPhotoIndex, totalPhotos, onCaptu
     }
   };
 
+  // Auto-trigger the next capture after a short breather when more shots are needed
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (countdown !== null) return;
+    if (totalPhotos <= 1) return;
+    if (currentPhotoIndex === 0) return;
+    if (currentPhotoIndex >= totalPhotos) return;
+    const timer = setTimeout(() => {
+      handleSnapClick();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [currentPhotoIndex, totalPhotos, countdown, isInitialized]);
+
   // If the camera won't play ball, show an error state
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-black/80 border-2 border-red-500/20 rounded-[3rem] backdrop-blur-xl max-w-md text-center animate-fadeIn shadow-2xl">
+      <div className="flex flex-col items-center justify-center p-12 bg-black/80 border-2 border-red-500/20 rounded-[3rem] backdrop-blur-xl max-w-md text-center animate-fadeIn shadow-2xl mx-auto">
         <div className="text-6xl mb-6">🕯️</div>
         <h3 className="text-2xl font-halloween text-red-400 mb-4">Portal Connection Failed</h3>
         <p className="text-white/60 mb-8">{error}</p>

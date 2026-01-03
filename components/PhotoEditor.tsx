@@ -55,9 +55,10 @@ interface PhotoEditorProps {
   isGuest?: boolean;
   onSave: (finalImage: string) => void;
   onCancel: () => void;
+  onPopup?: (message: string) => void;
 }
 
-const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, onSave, onCancel }) => {
+const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, onSave, onCancel, onPopup }) => {
   const [collageImage, setCollageImage] = useState<string | null>(null);
   const [filter, setFilter] = useState<SpookyFilter>('none');
   
@@ -206,10 +207,9 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
           const activeSlots = manualSlots && manualSlots.length > 0 ? manualSlots : detectedSlots;
 
           if (activeSlots.length > 0) {
-            const maxWidth = 1400;
-            const finalWidth = Math.min(maxWidth, frameImg.width || maxWidth);
-            const scale = finalWidth / frameImg.width;
-            const finalHeight = frameImg.height * scale;
+            // Preserve native resolution of the uploaded frame to avoid quality loss
+            const finalWidth = frameImg.width || 1400;
+            const finalHeight = frameImg.height ? frameImg.height : (frameImg.width ? frameImg.width * 1.5 : 2000);
             canvas.width = finalWidth;
             canvas.height = finalHeight;
 
@@ -441,15 +441,20 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
 
   return (
     <div className="relative flex flex-col gap-8 animate-fadeIn pb-20 overflow-hidden min-h-[80vh]">
-      <div className="z-10 flex flex-col lg:flex-row gap-8 items-start justify-center">
+      <div className="z-10 flex flex-col lg:flex-row gap-6 sm:gap-8 items-start justify-center">
         {/* Editor Preview Area */}
-        <div className="w-full max-w-md flex flex-col gap-6">
-          <div className="flex items-center justify-between px-6 py-3 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md">
+        <div className="w-full max-w-lg flex flex-col gap-5 sm:gap-6">
+          <div className="flex items-center justify-between px-5 py-3 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md">
             <div className="flex items-center gap-3">
               <span className="text-xl">{template.icon}</span>
-              <span className="text-sm font-halloween text-orange-400">{template.name}</span>
+              <button
+                onClick={() => { soundService.play('pop'); onCancel(); }}
+                className="text-sm font-halloween text-orange-400 hover:text-white transition-colors text-left"
+              >
+                {template.name}
+              </button>
             </div>
-            <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">{images.length} PHOTOS READY</span>
+            <span className="text-[9px] sm:text-[10px] text-purple-400 font-bold uppercase tracking-widest">{images.length} PHOTOS READY</span>
           </div>
 
           <div 
@@ -457,14 +462,16 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
             onPointerMove={onStickerMove}
             onPointerUp={onStickerUp}
             onPointerLeave={onStickerUp}
-            className="relative rounded-[3rem] overflow-hidden shadow-2xl bg-[#0c0a1f] border-[10px] border-white/5 p-4 max-h-[70vh] overflow-y-auto select-none custom-scrollbar"
+            className="relative rounded-[2rem] sm:rounded-[3rem] overflow-hidden shadow-2xl bg-[#0c0a1f] border-[8px] sm:border-[10px] border-white/5 p-3 sm:p-4 select-none"
           >
             {collageImage && (
               <img 
                 src={collageImage} 
-                className="w-full h-auto rounded-2xl transition-all"
+                className="w-full h-auto rounded-xl sm:rounded-2xl transition-all select-none"
                 style={{ filter: filterStyles[filter] }}
                 onPointerDown={() => setSelectedStickerId(null)}
+                onContextMenu={(e) => { e.preventDefault(); onPopup?.("Nice try, sneaky ghost! 👻"); }}
+                draggable={false}
               />
             )}
 
@@ -489,18 +496,18 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
         </div>
 
         {/* Sidebar Controls */}
-        <div className="w-full lg:w-80 flex flex-col gap-6">
-          <div className="p-8 bg-white/5 backdrop-blur-xl rounded-[2.5rem] border border-white/10 shadow-xl">
-            <h3 className="text-2xl font-halloween text-orange-400 mb-6">🔮 Edit Studio</h3>
+        <div className="w-full lg:w-80 flex flex-col gap-5 sm:gap-6">
+          <div className="p-6 sm:p-8 bg-white/5 backdrop-blur-xl rounded-[2rem] sm:rounded-[2.5rem] border border-white/10 shadow-xl">
+            <h3 className="text-xl sm:text-2xl font-halloween text-orange-400 mb-4 sm:mb-6">🔮 Edit Studio</h3>
             
-            <div className="mb-8">
-              <label className="text-[10px] text-purple-400 font-bold uppercase tracking-widest block mb-4">WITCHY FILTERS</label>
-              <div className="grid grid-cols-5 gap-2">
+            <div className="mb-6 sm:mb-8">
+              <label className="text-[10px] text-purple-400 font-bold uppercase tracking-widest block mb-3 sm:mb-4">WITCHY FILTERS</label>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {(['none', 'noir', 'slime', 'blood', 'ghost'] as SpookyFilter[]).map((f) => (
                   <button
                     key={f}
                     onClick={() => { soundService.play('click'); setFilter(f); }}
-                    className={`h-9 w-full rounded-xl border transition-all text-[8px] font-bold uppercase ${
+                    className={`h-9 w-full rounded-xl border transition-all text-[10px] sm:text-[8px] font-bold uppercase ${
                       filter === f ? 'bg-orange-500 border-orange-400 text-white shadow-lg' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
                     }`}
                   >
@@ -510,9 +517,9 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
               </div>
             </div>
 
-            <div className="mb-8">
+            <div className="mb-6 sm:mb-8">
               <label className="text-[10px] text-purple-400 font-bold uppercase tracking-widest block mb-4">GHOULISH PROPS</label>
-              <div className="grid grid-cols-4 gap-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="grid grid-cols-4 gap-2 sm:gap-3 max-h-40 sm:max-h-48 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
                 {STICKER_ASSETS.map(asset => (
                   <button
                     key={asset.label}
@@ -553,7 +560,7 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
           <div className="flex flex-col gap-4">
             <button 
               onClick={finishCollage}
-              className="w-full py-5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-[2rem] font-halloween text-2xl shadow-xl hover:scale-105 transition-all active:scale-95"
+              className="w-full py-4 sm:py-5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-[1.75rem] sm:rounded-[2rem] font-halloween text-xl sm:text-2xl shadow-xl hover:scale-105 transition-all active:scale-95"
             >
               FINISH & SAVE 📥
             </button>

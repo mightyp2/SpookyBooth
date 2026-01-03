@@ -69,11 +69,20 @@
 .animate-mist { animation: drift 18s ease-in-out infinite alternate; }
 .animate-ember { animation: emberRise var(--duration) linear infinite; }
 
-.bg-animated {
-  background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #050510);
-  background-size: 400% 400%;
-  animation: bgGradient 12s ease infinite;
-}
+  .bg-animated {
+    background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #050510);
+    background-size: 400% 400%;
+    animation: bgGradient 12s ease infinite;
+  }
+
+  /* Mobile-friendly helpers */
+  .card-grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 1rem; }
+  @media (min-width: 640px) {
+    .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 1024px) {
+    .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
 
 /* Pretty scrollbars because we care about the details */
 ::-webkit-scrollbar { width: 8px; }

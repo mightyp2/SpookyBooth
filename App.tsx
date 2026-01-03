@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Layout from './components/Layout';
 import Camera from './components/Camera';
 import PhotoEditor from './components/PhotoEditor';
-import { AppView, SavedPhoto, Template, User } from './types';
+import { AppView, PopupMode, SavedPhoto, Template, User } from './types';
 import { TEMPLATES } from './constants';
 import { soundService } from './services/soundService';
 import { apiService } from './services/apiService';
@@ -16,6 +16,9 @@ const App: React.FC = () => {
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
   const [gallery, setGallery] = useState<SavedPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [popup, setPopup] = useState<{ message: string; mode: PopupMode; onConfirm?: () => void } | null>(null);
+  const [screenshotWarned, setScreenshotWarned] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Login form states
@@ -59,6 +62,12 @@ const App: React.FC = () => {
           setIsGuest(false);
           localStorage.setItem('spooky_booth_user', JSON.stringify(res.user));
           await refreshVault(res.user.id);
+          if (pendingImage) {
+            const photo: SavedPhoto = { id: Date.now().toString(), url: pendingImage, timestamp: Date.now() };
+            const ok = await apiService.savePhoto(photo, res.user.id);
+            if (ok) setGallery(prev => [photo, ...prev]);
+            setPendingImage(null);
+          }
           setView(AppView.HOME);
         } else {
           setAuthError(res.error || 'The spell failed. Check your name or password.');
@@ -143,26 +152,22 @@ const App: React.FC = () => {
   }, [selectedTemplate.photoCount]);
 
   const saveToVault = async (image: string) => {
-    if (isGuest || !user) {
-      // For guests, we just trigger a browser download
-      soundService.play('magic');
-      const a = document.createElement('a');
-      a.href = image;
-      a.download = `spooky-strip-${Date.now()}.png`;
-      a.click();
-      alert("Strip saved to your device! Sign in next time to keep it in your permanent vault. 🎃");
-      setView(AppView.HOME);
-      return;
-    }
-
-    setIsLoading(true);
-    soundService.play('magic');
     const photo: SavedPhoto = {
       id: Date.now().toString(),
       url: image,
       timestamp: Date.now()
     };
     
+    if (isGuest || !user) {
+      setPendingImage(image);
+      soundService.play('magic');
+      showInfo("We saved this strip. Sign in or create an account to drop it into your vault! 🎉");
+      setView(AppView.AUTH);
+      return;
+    }
+
+    setIsLoading(true);
+    soundService.play('magic');
     const ok = await apiService.savePhoto(photo, user.id);
     if (ok) {
       setGallery(prev => [photo, ...prev]);
@@ -176,12 +181,12 @@ const App: React.FC = () => {
   const burnPhoto = async (id: string) => {
     if (!user) return;
     soundService.play('ghost');
-    if (confirm("Sure you want to delete this memory? It's permanent! 🕸️")) {
+    showConfirm("Sure you want to delete this memory? It's permanent! 🕸️", async () => {
       setIsLoading(true);
       const ok = await apiService.deletePhoto(id, user.id);
       if (ok) setGallery(prev => prev.filter(p => p.id !== id));
       setIsLoading(false);
-    }
+    });
   };
 
   const goHome = () => {
@@ -190,8 +195,34 @@ const App: React.FC = () => {
     setView(AppView.HOME);
   };
 
+  const showInfo = (message: string) => setPopup({ message, mode: 'info' });
+  const showConfirm = (message: string, onConfirm: () => void) => setPopup({ message, mode: 'confirm', onConfirm });
+
+  // Light screenshot deterrent: when the page is blurred/hidden during edit or viewing saved strips, show a warning popup once per session
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (screenshotWarned) return;
+      if (view === AppView.EDIT || view === AppView.GALLERY) {
+        setScreenshotWarned(true);
+        showInfo("Screenshots spotted? Save to your vault instead—it's safer (and looks better)! 📸");
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('blur', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleVisibility);
+    };
+  }, [view, screenshotWarned]);
+
   return (
-    <Layout user={user} isGuest={isGuest} onLogout={logOut} onLoginClick={() => setView(AppView.AUTH)}>
+      <Layout
+      user={user}
+      isGuest={isGuest}
+      onLogout={logOut}
+      onLoginClick={() => setView(AppView.AUTH)}
+      onHomeClick={goHome}
+    >
       <input type="file" multiple accept="image/*" className="hidden" ref={fileInputRef} onChange={onFilePicked} />
 
       {/* Login / Register Screen */}
@@ -251,29 +282,32 @@ const App: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 w-full px-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4 w-full px-2 sm:px-4">
             {TEMPLATES.map((t) => (
               <button
                 key={t.id}
                 onClick={() => pickTemplate(t)}
-                className="group relative flex flex-col items-center p-6 bg-white/5 border border-white/10 rounded-[2.5rem] hover:bg-white/10 hover:border-orange-500/30 transition-all transform hover:-translate-y-2 shadow-xl overflow-hidden"
+                className="group relative flex flex-col items-center p-4 sm:p-5 bg-white/5 border border-white/10 rounded-2xl sm:rounded-[2rem] hover:bg-white/10 hover:border-orange-500/30 transition-all transform hover:-translate-y-2 shadow-xl overflow-hidden w-full"
               >
-                <div className={`w-full aspect-[2/3.5] mb-5 rounded-2xl bg-gradient-to-b ${t.gradient} flex flex-col p-3 gap-2 border-[5px] ${t.accent} shadow-xl group-hover:scale-105 transition-transform`}>
+                <div className={`w-full aspect-[3/4] mb-3 sm:mb-4 rounded-xl bg-gradient-to-b ${t.gradient} flex flex-col p-2 gap-2 border-[3px] sm:border-[4px] ${t.accent} shadow-xl group-hover:scale-105 transition-transform`}>
                    {[...Array(t.photoCount)].map((_, i) => (
-                     <div key={i} className="flex-1 bg-white/10 rounded-lg border border-white/10 flex items-center justify-center text-3xl">🖼️</div>
+                     <div key={i} className="flex-1 bg-white/10 rounded-md border border-white/10 flex items-center justify-center text-2xl sm:text-3xl">🖼️</div>
                    ))}
                 </div>
-                <span className="font-halloween text-xl text-white group-hover:text-orange-400 transition-colors uppercase">{t.name}</span>
-                <span className="text-[10px] text-purple-300/50 font-bold uppercase tracking-widest mt-1">{t.photoCount} SNAPS</span>
+                <span className="font-halloween text-base sm:text-lg text-white group-hover:text-orange-400 transition-colors uppercase text-center">{t.name}</span>
+                <span className="text-[9px] sm:text-[10px] text-purple-300/50 font-bold uppercase tracking-widest mt-1">{t.photoCount} SNAPS</span>
               </button>
             ))}
           </div>
 
-          <div className="mt-8 flex flex-col items-center gap-4">
+      <div className="mt-8 pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl px-2 sm:px-0 justify-items-center">
+            <div className="col-span-full w-full text-center text-xs sm:text-sm text-orange-200 bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-3">
+              Saving your strips requires an account. Create one or sign in to keep your magic forever.
+            </div>
             {gallery.length > 0 && (
               <button 
                 onClick={() => { soundService.play('ghost'); setView(AppView.GALLERY); }}
-                className="text-orange-400 hover:text-orange-300 font-bold text-sm flex items-center gap-2 bg-orange-500/10 px-8 py-3 rounded-full border border-orange-500/20"
+                className="text-orange-400 hover:text-orange-300 font-bold text-sm flex items-center justify-center gap-2 bg-orange-500/10 px-6 py-3 rounded-full border border-orange-500/20 w-full"
               >
                 OPEN VAULT ({gallery.length}) →
               </button>
@@ -287,20 +321,20 @@ const App: React.FC = () => {
       {view === AppView.SOURCE_SELECT && (
         <div className="flex flex-col items-center gap-10 py-20 animate-slideUp">
           <h2 className="text-4xl font-halloween text-white uppercase">Choose Your Source</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl px-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 w-full max-w-2xl px-4 sm:px-6">
             <button 
               onClick={() => { soundService.play('click'); setView(AppView.CAPTURE); }}
-              className="group p-12 bg-white/5 border border-white/10 rounded-[3rem] hover:bg-orange-500/5 hover:border-orange-500/30 transition-all flex flex-col items-center gap-6 shadow-xl"
+              className="group p-8 sm:p-10 bg-white/5 border border-white/10 rounded-[1.75rem] sm:rounded-[3rem] hover:bg-orange-500/5 hover:border-orange-500/30 transition-all flex flex-col items-center gap-5 sm:gap-6 shadow-xl"
             >
-              <div className="text-6xl group-hover:scale-110 transition-transform">📸</div>
-              <span className="font-halloween text-2xl text-white">CAMERA</span>
+              <div className="text-5xl sm:text-6xl group-hover:scale-110 transition-transform">📸</div>
+              <span className="font-halloween text-xl sm:text-2xl text-white">CAMERA</span>
             </button>
             <button 
               onClick={() => { soundService.play('click'); fileInputRef.current?.click(); }}
-              className="group p-12 bg-white/5 border border-white/10 rounded-[3rem] hover:bg-purple-500/5 hover:border-purple-500/30 transition-all flex flex-col items-center gap-6 shadow-xl"
+              className="group p-8 sm:p-10 bg-white/5 border border-white/10 rounded-[1.75rem] sm:rounded-[3rem] hover:bg-purple-500/5 hover:border-purple-500/30 transition-all flex flex-col items-center gap-5 sm:gap-6 shadow-xl"
             >
-              <div className="text-6xl group-hover:scale-110 transition-transform">📁</div>
-              <span className="font-halloween text-2xl text-white">UPLOAD</span>
+              <div className="text-5xl sm:text-6xl group-hover:scale-110 transition-transform">📁</div>
+              <span className="font-halloween text-xl sm:text-2xl text-white">UPLOAD</span>
             </button>
           </div>
           <button onClick={goHome} className="text-white/20 hover:text-white font-bold uppercase tracking-widest text-xs">← Back to Designs</button>
@@ -317,7 +351,7 @@ const App: React.FC = () => {
       {/* Adding filters and stickers */}
       {view === AppView.EDIT && (
         <div className="animate-slideUp">
-          <PhotoEditor images={capturedImages} template={selectedTemplate} isGuest={isGuest} onSave={saveToVault} onCancel={goHome} />
+          <PhotoEditor images={capturedImages} template={selectedTemplate} isGuest={isGuest} onSave={saveToVault} onCancel={goHome} onPopup={showInfo} />
         </div>
       )}
 
@@ -332,7 +366,12 @@ const App: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {gallery.map((p) => (
               <div key={p.id} className="relative group rounded-[2rem] overflow-hidden shadow-2xl border-[8px] border-white/5 hover:border-orange-500/30 transition-all bg-black/40">
-                <img src={p.url} className="w-full h-auto" />
+                <img
+                  src={p.url}
+                  className="w-full h-auto select-none"
+                  onContextMenu={(e) => { e.preventDefault(); showInfo("Hands off! Join in to save your own spooks. 🎃"); }}
+                  draggable={false}
+                />
                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center p-6 gap-3 backdrop-blur-sm">
                   <a href={p.url} download={`strip-${p.id}.png`} className="w-full py-3 bg-white text-black text-center font-bold rounded-xl hover:bg-orange-400 hover:text-white transition-all">DOWNLOAD</a>
                   <button onClick={() => burnPhoto(p.id)} className="w-full py-3 bg-red-600/20 text-red-400 border border-red-500/30 font-bold rounded-xl hover:bg-red-600 hover:text-white transition-all">BURN 🔥</button>
@@ -348,6 +387,31 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center pointer-events-none">
           <div className="bg-orange-500 text-white px-8 py-4 rounded-full font-bold animate-pulse shadow-2xl flex items-center gap-3">
              <span>🔮</span> CASTING SPELL...
+          </div>
+        </div>
+      )}
+
+      {popup && (
+        <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="bg-[#0b0b1a] border border-white/10 rounded-3xl shadow-2xl max-w-sm w-full p-6 text-center">
+            <div className="text-4xl mb-3">✨</div>
+            <p className="text-white mb-6 text-sm">{popup.message}</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              {popup.mode === 'confirm' && (
+                <button
+                  onClick={() => { popup.onConfirm?.(); setPopup(null); }}
+                  className="flex-1 bg-orange-500 text-white py-3 rounded-2xl font-bold hover:bg-orange-400 transition-all"
+                >
+                  Do it!
+                </button>
+              )}
+              <button
+                onClick={() => setPopup(null)}
+                className="flex-1 bg-white/10 text-white py-3 rounded-2xl font-bold hover:bg-white/20 transition-all"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

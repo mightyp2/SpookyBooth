@@ -8,9 +8,10 @@ interface LayoutProps {
   isGuest?: boolean;
   onLogout?: () => void;
   onLoginClick?: () => void;
+  onHomeClick?: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLoginClick }) => {
+const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLoginClick, onHomeClick }) => {
   const [isMuted, setIsMuted] = useState(soundService.isMuted());
 
   // Handle the sound toggle logic
@@ -69,17 +70,21 @@ const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLo
         </div>
       </div>
 
-      <header className="px-6 py-4 flex items-center justify-between sticky top-0 z-50 bg-[#050510]/80 backdrop-blur-md border-b border-purple-900/30">
-        <div className="flex items-center gap-3">
-          <span className="text-3xl animate-spooky-sway inline-block">🎃</span>
-          <h1 className="text-3xl font-halloween text-orange-500 drop-shadow-[0_0_15px_rgba(249,115,22,0.4)] tracking-tighter">
+      <header className="px-4 sm:px-6 py-4 flex flex-wrap gap-3 items-center justify-between sticky top-0 z-50 bg-[#050510]/80 backdrop-blur-md border-b border-purple-900/30">
+        <div className="flex items-center gap-3 min-w-[200px]">
+          <span className="text-2xl sm:text-3xl animate-spooky-sway inline-block">🎃</span>
+          <button
+            onClick={onHomeClick || onLoginClick}
+            className="text-2xl sm:text-3xl font-halloween text-orange-500 drop-shadow-[0_0_15px_rgba(249,115,22,0.4)] tracking-tighter leading-tight text-left"
+            title="Back to home"
+          >
             SPOOKY <span className="text-purple-400">BOOTH</span>
-          </h1>
+          </button>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           {user ? (
-            <div className="flex items-center gap-4 bg-white/5 border border-white/10 px-4 py-2 rounded-full backdrop-blur-md">
+            <div className="flex items-center gap-3 sm:gap-4 bg-white/5 border border-white/10 px-3 sm:px-4 py-2 rounded-full backdrop-blur-md">
                <span className="text-xs text-orange-400 font-bold uppercase tracking-widest hidden sm:inline">User: {user.username}</span>
                <button 
                  onClick={onLogout}
@@ -121,7 +126,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLo
       <footer className="p-8 text-center relative z-10 mt-auto">
         <div className="w-full h-px bg-gradient-to-r from-transparent via-purple-900/30 to-transparent mb-6"></div>
         <p className="text-xs text-purple-400/30 font-bold uppercase tracking-[0.3em]">
-          © 2025 Spooky BOOTH • Haunted by 2025. Seriously… name one person who had a good year. 👻
+          © 2026 Spooky BOOTH • Happy New Year 2026 🎉
         </p>
       </footer>
     </div>

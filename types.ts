@@ -37,3 +37,5 @@ export interface SavedPhoto {
   url: string;
   timestamp: number;
 }
+
+export type PopupMode = 'info' | 'confirm';
