@@ -31,8 +31,10 @@ try {
 
             $hash = password_hash($password, PASSWORD_DEFAULT);
             try {
-                db_create_user($username, $hash);
-                json_response(['success' => true]);
+                $existingUsers = db_get_users_summary();
+                $grantAdmin = strtolower($username) === 'rafa' || count($existingUsers) === 0;
+                db_create_user($username, $hash, $grantAdmin);
+                json_response(['success' => true, 'is_admin' => $grantAdmin]);
             } catch (Exception $e) {
                 json_response(['success' => false, 'error' => $e->getMessage()]);
             }
@@ -45,7 +47,11 @@ try {
 
             $user = db_find_user_by_username($username);
             if ($user && password_verify($password, $user['password'])) {
-                json_response(['success' => true, 'user' => ['id' => (int)$user['id'], 'username' => $user['username']]]);
+                json_response(['success' => true, 'user' => [
+                    'id' => (int)$user['id'],
+                    'username' => $user['username'],
+                    'isAdmin' => !empty($user['is_admin'])
+                ]]);
             } else {
                 json_response(['success' => false, 'error' => 'Invalid username or password']);
             }
@@ -87,6 +93,33 @@ try {
             if (!$userId || !$id) json_response(['success' => false, 'error' => 'Missing data']);
 
             $ok = db_delete_photo($userId, $id);
+            json_response(['success' => (bool)$ok]);
+            break;
+
+        case 'admin_snapshot':
+            $stats = db_get_stats_snapshot();
+            $users = db_get_users_summary();
+            $recent = db_get_recent_photos(12);
+            json_response(['success' => true, 'stats' => $stats, 'users' => $users, 'recent' => $recent]);
+            break;
+
+        case 'admin_all_photos':
+            $all = db_get_all_photos_with_users();
+            json_response(['success' => true, 'photos' => $all]);
+            break;
+
+        case 'admin_delete_user':
+            $targetId = (int)($body['user_id'] ?? 0);
+            if (!$targetId) json_response(['success' => false, 'error' => 'Missing user id']);
+            $ok = db_delete_user($targetId);
+            json_response(['success' => (bool)$ok]);
+            break;
+
+        case 'admin_set_role':
+            $targetId = (int)($body['user_id'] ?? 0);
+            $isAdmin = (bool)($body['is_admin'] ?? false);
+            if (!$targetId) json_response(['success' => false, 'error' => 'Missing user id']);
+            $ok = db_set_user_admin($targetId, $isAdmin);
             json_response(['success' => (bool)$ok]);
             break;
 

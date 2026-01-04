@@ -6,12 +6,13 @@
   html, body, #root { height: 100%; }
   body {
     margin: 0;
-    font-family: 'Quicksand', sans-serif;
+    font-family: 'Metamorphous', 'Times New Roman', serif;
     background-color: #050510;
     color: #ffffff;
     overflow-x: hidden;
   }
-  .font-halloween { font-family: 'Fredoka One', cursive; }
+  .font-halloween { font-family: 'Nosifer', 'Metamorphous', cursive; }
+  .font-admin { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
 }
 
 /* Smooth entry animations */

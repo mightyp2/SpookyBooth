@@ -10,11 +10,12 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         // allow Cloudflare ephemeral tunnel hosts (trycloudflare / cfargotunnel) and the current tunnel host
         allowedHosts: [
-          /\.trycloudflare\.com$/,
-          /\.cfargotunnel\.com$/,
+          '*.trycloudflare.com',
+          '*.cfargotunnel.com',
           'realized-provinces-already-lot.trycloudflare.com',
           'agencies-isp-select-actively.trycloudflare.com',
-          'not-transmit-codes-newman.trycloudflare.com'
+          'not-transmit-codes-newman.trycloudflare.com',
+          'janet-quit-builder-argued.trycloudflare.com'
         ],
       },
       plugins: [react()],

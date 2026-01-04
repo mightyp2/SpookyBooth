@@ -11,9 +11,11 @@ const SOUND_SOURCES: Record<string, string[]> = {
   error: []
 };
 
+type SoundKey = keyof typeof SOUND_SOURCES;
+
 class SoundService {
   private muted: boolean = false;
-  private audioCache: Map<string, HTMLAudioElement> = new Map();
+  private audioCache: Map<SoundKey, HTMLAudioElement> = new Map();
   private audioCtx: AudioContext | null = null;
 
   constructor() {
@@ -24,14 +26,14 @@ class SoundService {
       for (const url of urls) {
         const audio = new Audio(url);
         audio.addEventListener('canplaythrough', () => {
-          this.audioCache.set(key, audio);
+          this.audioCache.set(key as SoundKey, audio);
         }, { once: true });
         audio.addEventListener('error', () => {
           const nextIndex = urls.indexOf(url) + 1;
           if (nextIndex < urls.length) {
             const next = new Audio(urls[nextIndex]);
             try { next.load(); } catch {}
-            next.addEventListener('canplaythrough', () => this.audioCache.set(key, next), { once: true });
+            next.addEventListener('canplaythrough', () => this.audioCache.set(key as SoundKey, next), { once: true });
           }
         }, { once: true });
         try {
@@ -60,7 +62,7 @@ class SoundService {
     }
   }
 
-  private chimeFallback(soundName: string) {
+  private chimeFallback(soundName: SoundKey | string) {
     this.unlockCtx();
     if (!this.audioCtx) return;
     const ctx = this.audioCtx;
@@ -106,7 +108,7 @@ class SoundService {
     }
   }
 
-  play(soundName: keyof typeof SOUNDS) {
+  play(soundName: SoundKey) {
     if (this.muted) return;
     this.unlockCtx();
     

@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Layout from './components/Layout';
 import Camera from './components/Camera';
 import PhotoEditor from './components/PhotoEditor';
-import { AppView, PopupMode, SavedPhoto, Template, User } from './types';
+import AdminPanel from './components/AdminPanel';
+import { AdminGalleryPhoto, AdminSnapshot, AppView, PopupMode, SavedPhoto, Template, User } from './types';
 import { TEMPLATES } from './constants';
 import { soundService } from './services/soundService';
 import { apiService } from './services/apiService';
@@ -19,7 +20,22 @@ const App: React.FC = () => {
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [popup, setPopup] = useState<{ message: string; mode: PopupMode; onConfirm?: () => void } | null>(null);
   const [screenshotWarned, setScreenshotWarned] = useState(false);
+  const [adminSnapshot, setAdminSnapshot] = useState<AdminSnapshot | null>(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [adminTab, setAdminTab] = useState<'wall' | 'stats' | 'users'>('wall');
+  const [adminGallery, setAdminGallery] = useState<AdminGalleryPhoto[]>([]);
+  const [adminGalleryLoading, setAdminGalleryLoading] = useState(false);
+  const [adminGalleryError, setAdminGalleryError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const showInfo = useCallback((message: string) => {
+    setPopup({ message, mode: 'info' });
+  }, []);
+
+  const showConfirm = useCallback((message: string, onConfirm: () => void) => {
+    setPopup({ message, mode: 'confirm', onConfirm });
+  }, []);
 
   // Login form states
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -32,6 +48,99 @@ const App: React.FC = () => {
     setGallery(photos);
     setIsLoading(false);
   }, []);
+
+  const loadAdminSnapshot = useCallback(async (silent: boolean = false) => {
+    if (!user?.isAdmin) return;
+    if (!silent) setAdminLoading(true);
+    setAdminError(null);
+    try {
+      const res = await apiService.adminSnapshot();
+      if (res.success && res.data) {
+        setAdminSnapshot(res.data);
+      } else {
+        setAdminSnapshot(null);
+        setAdminError(res.error || 'Unable to load admin data right now.');
+      }
+    } catch (err) {
+      setAdminSnapshot(null);
+      setAdminError('Unable to load admin data right now.');
+    } finally {
+      if (!silent) setAdminLoading(false);
+    }
+  }, [user]);
+
+  const loadAdminGallery = useCallback(async () => {
+    if (!user?.isAdmin) return;
+    setAdminGalleryLoading(true);
+    setAdminGalleryError(null);
+    try {
+      const res = await apiService.adminAllPhotos();
+      if (res.success && res.photos) {
+        setAdminGallery(res.photos);
+      } else {
+        setAdminGallery([]);
+        setAdminGalleryError(res.error || 'Unable to load the wall right now.');
+      }
+    } catch (err) {
+      setAdminGallery([]);
+      setAdminGalleryError('Unable to load the wall right now.');
+    } finally {
+      setAdminGalleryLoading(false);
+    }
+  }, [user]);
+
+  const refreshAdminView = useCallback(() => {
+    if (!user?.isAdmin) return;
+    if (adminTab === 'wall') {
+      void loadAdminGallery();
+    } else {
+      void loadAdminSnapshot();
+    }
+  }, [user, adminTab, loadAdminGallery, loadAdminSnapshot]);
+
+  const handleAdminDeleteUser = useCallback(async (targetId: number) => {
+    if (!user?.isAdmin) return;
+    if (targetId === user.id) {
+      showInfo("You can't delete your own account from here.");
+      return;
+    }
+    setAdminError(null);
+    setAdminLoading(true);
+    try {
+      const ok = await apiService.adminDeleteUser(targetId);
+      if (!ok) throw new Error('Failed');
+      soundService.play('ghost');
+      showInfo('User removed from the vault.');
+      await loadAdminSnapshot(true);
+    } catch (err) {
+      soundService.play('error');
+      setAdminError('Unable to delete that user right now.');
+    } finally {
+      setAdminLoading(false);
+    }
+  }, [user, loadAdminSnapshot, showInfo]);
+
+  const handleAdminToggleRole = useCallback(async (targetId: number, nextValue: boolean) => {
+    if (!user?.isAdmin) return;
+    if (targetId === user.id) {
+      showInfo('You already have full access here.');
+      return;
+    }
+    setAdminError(null);
+    setAdminLoading(true);
+    try {
+      const ok = await apiService.adminSetRole(targetId, nextValue);
+      if (!ok) throw new Error('Failed');
+      soundService.play('success');
+      await loadAdminSnapshot(true);
+      showInfo(nextValue ? 'Promoted to admin.' : 'Admin access revoked.');
+    } catch (err) {
+      soundService.play('error');
+      setAdminError('Unable to update that role right now.');
+    } finally {
+      setAdminLoading(false);
+    }
+  }, [user, loadAdminSnapshot, showInfo]);
 
   // Let's check if we already know who this is
   useEffect(() => {
@@ -48,6 +157,20 @@ const App: React.FC = () => {
     }
   }, [refreshVault]);
 
+  useEffect(() => {
+    if (view === AppView.ADMIN) {
+      if (!user?.isAdmin) {
+        setView(AppView.HOME);
+        return;
+      }
+      if (adminTab === 'wall') {
+        void loadAdminGallery();
+      } else {
+        void loadAdminSnapshot();
+      }
+    }
+  }, [view, user, adminTab, loadAdminSnapshot, loadAdminGallery]);
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -60,6 +183,9 @@ const App: React.FC = () => {
         if (res.success && res.user) {
           setUser(res.user);
           setIsGuest(false);
+          setAdminTab('wall');
+          setAdminGallery([]);
+          setAdminGalleryError(null);
           localStorage.setItem('spooky_booth_user', JSON.stringify(res.user));
           await refreshVault(res.user.id);
           if (pendingImage) {
@@ -95,6 +221,13 @@ const App: React.FC = () => {
     soundService.play('ghost');
     setUser(null);
     setIsGuest(true);
+    setAdminSnapshot(null);
+    setAdminError(null);
+    setAdminLoading(false);
+    setAdminTab('wall');
+    setAdminGallery([]);
+    setAdminGalleryError(null);
+    setAdminGalleryLoading(false);
     setView(AppView.HOME);
   };
 
@@ -104,6 +237,13 @@ const App: React.FC = () => {
     setIsGuest(true);
     localStorage.removeItem('spooky_booth_user');
     setGallery([]);
+    setAdminSnapshot(null);
+    setAdminError(null);
+    setAdminLoading(false);
+    setAdminTab('wall');
+    setAdminGallery([]);
+    setAdminGalleryError(null);
+    setAdminGalleryLoading(false);
     setView(AppView.HOME);
   };
 
@@ -189,14 +329,80 @@ const App: React.FC = () => {
     });
   };
 
-  const goHome = () => {
+  const openVault = useCallback(() => {
+    if (!user) {
+      soundService.play('pop');
+      showInfo('Sign in to unlock your spooky vault.');
+      setView(AppView.AUTH);
+      return;
+    }
+    soundService.play('ghost');
+    setView(AppView.GALLERY);
+  }, [user, showInfo]);
+
+  const goHome = useCallback(() => {
     soundService.play('pop');
     setCapturedImages([]);
     setView(AppView.HOME);
-  };
+  }, []);
 
-  const showInfo = (message: string) => setPopup({ message, mode: 'info' });
-  const showConfirm = (message: string, onConfirm: () => void) => setPopup({ message, mode: 'confirm', onConfirm });
+  const openAdmin = useCallback((nextTab: 'wall' | 'stats' | 'users') => {
+    if (!user?.isAdmin) return;
+    soundService.play('pop');
+    setAdminTab(nextTab);
+    setView(AppView.ADMIN);
+  }, [user]);
+
+  const navItems = useMemo(() => {
+    const items: { key: string; label: string; icon: string; onClick: () => void; active: boolean; disabled?: boolean; badge?: number }[] = [
+      {
+        key: 'home',
+        label: 'Templates',
+        icon: '🏠',
+        active: view === AppView.HOME,
+        onClick: goHome
+      },
+      {
+        key: 'vault',
+        label: 'Vault',
+        icon: '🗃️',
+        active: view === AppView.GALLERY,
+        onClick: openVault,
+        badge: user ? gallery.length : undefined
+      }
+    ];
+
+    if (user?.isAdmin) {
+      items.push(
+        {
+          key: 'admin-wall',
+          label: 'Wall of Fame',
+          icon: '🖼️',
+          active: view === AppView.ADMIN && adminTab === 'wall',
+          onClick: () => openAdmin('wall'),
+          badge: adminGallery.length || undefined
+        },
+        {
+          key: 'admin-stats',
+          label: 'Live Stats',
+          icon: '📊',
+          active: view === AppView.ADMIN && adminTab === 'stats',
+          onClick: () => openAdmin('stats'),
+          badge: adminSnapshot?.stats.totalPhotos
+        },
+        {
+          key: 'admin-users',
+          label: 'Users',
+          icon: '🧑‍💻',
+          active: view === AppView.ADMIN && adminTab === 'users',
+          onClick: () => openAdmin('users'),
+          badge: adminSnapshot?.users.length
+        }
+      );
+    }
+
+    return items;
+  }, [view, goHome, openVault, user, gallery.length, openAdmin, adminSnapshot, adminTab, adminGallery.length]);
 
   // Light screenshot deterrent: when the page is blurred/hidden during edit or viewing saved strips, show a warning popup once per session
   useEffect(() => {
@@ -213,7 +419,7 @@ const App: React.FC = () => {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('blur', handleVisibility);
     };
-  }, [view, screenshotWarned]);
+  }, [view, screenshotWarned, showInfo]);
 
   return (
       <Layout
@@ -221,7 +427,8 @@ const App: React.FC = () => {
       isGuest={isGuest}
       onLogout={logOut}
       onLoginClick={() => setView(AppView.AUTH)}
-      onHomeClick={goHome}
+        onHomeClick={goHome}
+        navItems={navItems}
     >
       <input type="file" multiple accept="image/*" className="hidden" ref={fileInputRef} onChange={onFilePicked} />
 
@@ -282,31 +489,33 @@ const App: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4 w-full px-2 sm:px-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-5 sm:gap-4 w-full max-w-4xl px-3 sm:px-6 mx-auto justify-items-center">
             {TEMPLATES.map((t) => (
               <button
                 key={t.id}
                 onClick={() => pickTemplate(t)}
-                className="group relative flex flex-col items-center p-4 sm:p-5 bg-white/5 border border-white/10 rounded-2xl sm:rounded-[2rem] hover:bg-white/10 hover:border-orange-500/30 transition-all transform hover:-translate-y-2 shadow-xl overflow-hidden w-full"
+                className="group relative flex w-full max-w-[180px] flex-col items-center rounded-2xl sm:rounded-[2rem] border border-white/10 bg-white/5 p-4 sm:p-5 hover:-translate-y-2 hover:bg-white/10 hover:border-orange-500/30 transition-all shadow-xl overflow-hidden"
               >
-                <div className={`w-full aspect-[3/4] mb-3 sm:mb-4 rounded-xl bg-gradient-to-b ${t.gradient} flex flex-col p-2 gap-2 border-[3px] sm:border-[4px] ${t.accent} shadow-xl group-hover:scale-105 transition-transform`}>
+                <div className={`w-full aspect-[3/4] mb-3 sm:mb-4 rounded-xl bg-gradient-to-b ${t.gradient} flex flex-col p-1.5 sm:p-2 gap-1.5 sm:gap-2 border-[2px] sm:border-[4px] ${t.accent} shadow-xl group-hover:scale-105 transition-transform`}>
                    {[...Array(t.photoCount)].map((_, i) => (
                      <div key={i} className="flex-1 bg-white/10 rounded-md border border-white/10 flex items-center justify-center text-2xl sm:text-3xl">🖼️</div>
                    ))}
                 </div>
                 <span className="font-halloween text-base sm:text-lg text-white group-hover:text-orange-400 transition-colors uppercase text-center">{t.name}</span>
-                <span className="text-[9px] sm:text-[10px] text-purple-300/50 font-bold uppercase tracking-widest mt-1">{t.photoCount} SNAPS</span>
+                <span className="mt-1 text-[9px] sm:text-[10px] text-purple-300/50 font-bold uppercase tracking-widest">{t.photoCount} SNAPS</span>
               </button>
             ))}
           </div>
 
       <div className="mt-8 pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl px-2 sm:px-0 justify-items-center">
-            <div className="col-span-full w-full text-center text-xs sm:text-sm text-orange-200 bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-3">
-              Saving your strips requires an account. Create one or sign in to keep your magic forever.
-            </div>
+            {!user && (
+              <div className="col-span-full w-full text-center text-xs sm:text-sm text-orange-200 bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-3">
+                Saving your strips requires an account. Create one or sign in to keep your magic forever.
+              </div>
+            )}
             {gallery.length > 0 && (
               <button 
-                onClick={() => { soundService.play('ghost'); setView(AppView.GALLERY); }}
+                onClick={openVault}
                 className="text-orange-400 hover:text-orange-300 font-bold text-sm flex items-center justify-center gap-2 bg-orange-500/10 px-6 py-3 rounded-full border border-orange-500/20 w-full"
               >
                 OPEN VAULT ({gallery.length}) →
@@ -363,23 +572,37 @@ const App: React.FC = () => {
             <button onClick={goHome} className="px-10 py-4 bg-orange-500 hover:bg-orange-400 text-white rounded-[2rem] font-halloween text-xl shadow-lg transition-all active:scale-95">NEW STRIP ✨</button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6 xl:gap-8">
             {gallery.map((p) => (
-              <div key={p.id} className="relative group rounded-[2rem] overflow-hidden shadow-2xl border-[8px] border-white/5 hover:border-orange-500/30 transition-all bg-black/40">
+                <div key={p.id} className="relative group overflow-hidden rounded-xl sm:rounded-[2rem] shadow-2xl border-[4px] sm:border-[8px] border-white/5 hover:border-orange-500/30 transition-all bg-black/40">
                 <img
                   src={p.url}
-                  className="w-full h-auto select-none"
+                    className="w-full h-auto select-none"
                   onContextMenu={(e) => { e.preventDefault(); showInfo("Hands off! Join in to save your own spooks. 🎃"); }}
                   draggable={false}
                 />
-                <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center p-6 gap-3 backdrop-blur-sm">
-                  <a href={p.url} download={`strip-${p.id}.png`} className="w-full py-3 bg-white text-black text-center font-bold rounded-xl hover:bg-orange-400 hover:text-white transition-all">DOWNLOAD</a>
-                  <button onClick={() => burnPhoto(p.id)} className="w-full py-3 bg-red-600/20 text-red-400 border border-red-500/30 font-bold rounded-xl hover:bg-red-600 hover:text-white transition-all">BURN 🔥</button>
+                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center p-4 sm:p-6 gap-2 sm:gap-3 backdrop-blur-sm">
+                    <a href={p.url} download={`strip-${p.id}.png`} className="w-full py-2 sm:py-3 bg-white text-black text-center font-bold rounded-lg sm:rounded-xl hover:bg-orange-400 hover:text-white transition-all">DOWNLOAD</a>
+                    <button onClick={() => burnPhoto(p.id)} className="w-full py-2 sm:py-3 bg-red-600/20 text-red-400 border border-red-500/30 font-bold rounded-lg sm:rounded-xl hover:bg-red-600 hover:text-white transition-all">BURN 🔥</button>
                 </div>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {view === AppView.ADMIN && user?.isAdmin && (
+        <AdminPanel
+          mode={adminTab}
+          snapshot={adminSnapshot}
+          gallery={adminGallery}
+          loading={adminTab === 'wall' ? adminGalleryLoading : adminLoading}
+          error={adminTab === 'wall' ? adminGalleryError : adminError}
+          onRefresh={refreshAdminView}
+          onDeleteUser={handleAdminDeleteUser}
+          onToggleAdmin={handleAdminToggleRole}
+          currentUserId={user.id}
+        />
       )}
 
       {/* Loading overlay for async magic */}

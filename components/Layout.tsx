@@ -9,10 +9,20 @@ interface LayoutProps {
   onLogout?: () => void;
   onLoginClick?: () => void;
   onHomeClick?: () => void;
+  navItems?: Array<{
+    key: string;
+    label: string;
+    icon?: string;
+    onClick: () => void;
+    active?: boolean;
+    disabled?: boolean;
+    badge?: number;
+  }>;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLoginClick, onHomeClick }) => {
+const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLoginClick, onHomeClick, navItems }) => {
   const [isMuted, setIsMuted] = useState(soundService.isMuted());
+  const [navOpen, setNavOpen] = useState(false);
 
   // Handle the sound toggle logic
   const toggleMute = () => {
@@ -20,6 +30,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLo
     soundService.setMuted(newMute);
     setIsMuted(newMute);
     if (!newMute) soundService.play('pop');
+  };
+
+  const toggleNavMenu = () => {
+    if (!navOpen) soundService.play('pop');
+    setNavOpen((prev) => !prev);
+  };
+
+  const handleNavClick = (handler: () => void) => {
+    handler();
+    setNavOpen(false);
   };
 
   // Generate some random embers for the background so they look organic
@@ -70,19 +90,54 @@ const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLo
         </div>
       </div>
 
-      <header className="px-4 sm:px-6 py-4 flex flex-wrap gap-3 items-center justify-between sticky top-0 z-50 bg-[#050510]/80 backdrop-blur-md border-b border-purple-900/30">
-        <div className="flex items-center gap-3 min-w-[200px]">
+      <header className="px-4 sm:px-6 py-4 flex flex-wrap md:flex-nowrap items-center gap-3 sticky top-0 z-50 bg-[#050510]/80 backdrop-blur-md border-b border-purple-900/30">
+        <div className="flex items-center gap-3 min-w-[200px] order-1">
           <span className="text-2xl sm:text-3xl animate-spooky-sway inline-block">🎃</span>
           <button
             onClick={onHomeClick || onLoginClick}
-            className="text-2xl sm:text-3xl font-halloween text-orange-500 drop-shadow-[0_0_15px_rgba(249,115,22,0.4)] tracking-tighter leading-tight text-left"
+            className="text-lg sm:text-3xl font-halloween text-orange-500 drop-shadow-[0_0_15px_rgba(249,115,22,0.4)] tracking-tighter leading-tight text-left"
             title="Back to home"
           >
             SPOOKY <span className="text-purple-400">BOOTH</span>
           </button>
         </div>
-        
-        <div className="flex items-center gap-3 sm:gap-4">
+
+        {navItems && navItems.length > 0 && (
+          <div className="relative order-3 md:order-2 flex items-center justify-center w-full md:w-auto md:flex-1">
+            <button
+              onClick={toggleNavMenu}
+              className="md:hidden px-4 py-2 rounded-full bg-white/10 text-white/80 text-[11px] font-bold uppercase tracking-[0.35em] border border-white/15"
+            >
+              {navOpen ? 'Close Menu ✕' : 'Menu ☰'}
+            </button>
+            <nav
+              className={`${navOpen ? 'flex' : 'hidden'} md:flex flex-col md:flex-row items-center justify-center gap-3 md:gap-2 bg-white/5 md:bg-transparent border border-white/10 md:border-0 rounded-3xl md:rounded-none p-4 md:p-0 md:static absolute top-full left-1/2 md:left-auto md:top-auto -translate-x-1/2 md:translate-x-0 mt-2 md:mt-0 w-[calc(100vw-2.5rem)] max-w-sm md:w-auto`}
+            >
+              {navItems.map(item => (
+                <button
+                  key={item.key}
+                  onClick={() => handleNavClick(item.onClick)}
+                  disabled={item.disabled}
+                  className={`flex items-center justify-center gap-2 px-5 py-2 rounded-full border text-[10px] font-bold uppercase tracking-[0.35em] transition-all w-full md:w-auto ${
+                    item.active
+                      ? 'bg-orange-500/20 text-orange-200 border-orange-500/40 shadow-lg shadow-orange-500/20'
+                      : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10 hover:text-white'
+                  } ${item.disabled ? 'opacity-40 cursor-not-allowed' : ''}`.trim()}
+                >
+                  {item.icon && <span className="text-sm">{item.icon}</span>}
+                  <span>{item.label}</span>
+                  {item.badge !== undefined && (
+                    <span className="ml-2 px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-[9px] font-semibold">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 sm:gap-4 ml-auto order-2 md:order-3">
           {user ? (
             <div className="flex items-center gap-3 sm:gap-4 bg-white/5 border border-white/10 px-3 sm:px-4 py-2 rounded-full backdrop-blur-md">
                <span className="text-xs text-orange-400 font-bold uppercase tracking-widest hidden sm:inline">User: {user.username}</span>
