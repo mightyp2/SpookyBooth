@@ -15,10 +15,10 @@ npm install
 ```
 
 2) Start the PHP backend (this serves the API endpoints)
-
+(has to match the port in .env file) and in that file do npm install fund
 ```bash
 # from the project root
-php -S localhost:8002 -t .
+php -S localhost:8002 -t . 
 ```
 
 3) Make sure the frontend knows where the API is. Open (or create) `.env.local` in the project root and put:
