@@ -63,9 +63,6 @@ Common problems and fixes
 - If the console warns about `cdn.tailwindcss.com` — that's just saying the CDN is fine for dev but not ideal for production. Not urgent.
 - If the browser shows a missing favicon, replace `favicon.svg` or drop a `favicon.ico` in the project root.
 
-If anything breaks, tell me what you see and I’ll walk you through it.
-
-— Rafa
 
 **Important files and what they do (plain English)**
 
@@ -85,14 +82,12 @@ If anything breaks, tell me what you see and I’ll walk you through it.
 
 **What this long path means**
 
-When you see `/home/roon/Desktop/RafaBooth` broken down:
+When you see `/home/user/Desktop/SpookyBooth` broken down:
 - `/home` — The folder on the computer where personal user folders live and this will be yours when you downoad this projet.
 - `/home/user` — The account (user) named `user` on this machine.
 - `/home/user/Desktop` — The `Desktop` folder for that user. Files here usually appear on the user's desktop screen.
 - `/home/user/Desktop/RafaBooth` — The project folder. All the files I just described live inside this folder.
 
-If you move the project to another computer or another folder nothing in the app requires this exact path — it only matters where you store the project on your machine. When I write commands in the guide I used the project root path so it's clear where to run them from.  for windows the path will be C:\Users\username\Desktop or whatever etc etc blah blah
 
-If you want me to simplify any of the explanations above further or add screenshots, tell me which file explanations you'd like shorter or pasted into a printable note for your friend.
 
 
