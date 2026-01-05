@@ -15,7 +15,6 @@ npm install
 ```
 
 2) Start the PHP backend (this serves the API endpoints)
-(has to match the port in .env file) 
 ```bash
 # from the project root
 php -S localhost:8002 -t . 
