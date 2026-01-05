@@ -1,7 +1,5 @@
 **READ THISSSSSS**
 
-This is my little photo-strip app. I'm writing this so you can run it on your laptop and poke around.
-
 What you need
 - Node.js (v18+)
 - npm
@@ -12,7 +10,7 @@ Step-by-step — run and test
 1) Install frontend packages
 
 ```bash
-cd /home/youruser/Desktop/RafaBooth
+cd /home/youruser/Desktop/SpookyBooth
 npm install
 ```
 
