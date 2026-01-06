@@ -1,5 +1,5 @@
 
-import { AdminGalleryPhoto, AdminSnapshot, SavedPhoto, User } from '../types';
+import { AdminGalleryPhoto, AdminHelpSummary, AdminSnapshot, SavedPhoto, User } from '../types';
 
 // Prefer explicit env, otherwise use same-origin to avoid mixed-content/ad-block issues
 const API_URL =
@@ -104,6 +104,15 @@ export const apiService = {
         }))
       : [];
     return { success: true, photos };
+  },
+
+  async adminHelp(): Promise<{ success: boolean; help?: AdminHelpSummary; error?: string }> {
+    const res = await fetch(`${API_URL}?action=admin_help`);
+    const data = await res.json();
+    if (!data?.success) {
+      return { success: false, error: data?.error || 'Failed to load help content' };
+    }
+    return { success: true, help: normalizeAdminHelp(data.help) };
   }
 };
 
@@ -147,5 +156,22 @@ function normalizeAdminSnapshot(payload: any): AdminSnapshot {
       }))
     : [];
 
-  return { stats, users, recent };
+  const help = payload?.help ? normalizeAdminHelp(payload.help) : undefined;
+
+  return help ? { stats, users, recent, help } : { stats, users, recent };
+}
+
+function normalizeAdminHelp(raw: any): AdminHelpSummary {
+  const asArray = (value: any) => (Array.isArray(value) ? value.map((item) => String(item)) : []);
+  return {
+    projectName: String(raw?.projectName || ''),
+    pitch: String(raw?.pitch || ''),
+    technologies: asArray(raw?.technologies),
+    frontendLibraries: asArray(raw?.frontendLibraries),
+    backendStack: asArray(raw?.backendStack),
+    tooling: asArray(raw?.tooling),
+    fonts: asArray(raw?.fonts),
+    highlights: asArray(raw?.highlights),
+    roadmap: asArray(raw?.roadmap)
+  };
 }

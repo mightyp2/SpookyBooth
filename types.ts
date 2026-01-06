@@ -72,6 +72,19 @@ export interface AdminSnapshot {
   stats: AdminStats;
   users: AdminUserSummary[];
   recent: AdminRecentPhoto[];
+  help?: AdminHelpSummary;
+}
+
+export interface AdminHelpSummary {
+  projectName: string;
+  pitch: string;
+  technologies: string[];
+  frontendLibraries: string[];
+  backendStack: string[];
+  tooling: string[];
+  fonts: string[];
+  highlights: string[];
+  roadmap: string[];
 }
 
 export interface AdminGalleryPhoto {

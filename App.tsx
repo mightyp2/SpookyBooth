@@ -3,10 +3,13 @@ import Layout from './components/Layout';
 import Camera from './components/Camera';
 import PhotoEditor from './components/PhotoEditor';
 import AdminPanel from './components/AdminPanel';
-import { AdminGalleryPhoto, AdminSnapshot, AppView, PopupMode, SavedPhoto, Template, User } from './types';
+import { AdminGalleryPhoto, AdminHelpSummary, AdminSnapshot, AppView, PopupMode, SavedPhoto, Template, User } from './types';
 import { TEMPLATES } from './constants';
 import { soundService } from './services/soundService';
 import { apiService } from './services/apiService';
+
+const SESSION_KEY = 'chinggus_user';
+const LEGACY_SESSION_KEY = 'spooky_booth_user';
 
 const App: React.FC = () => {
   // We want people to see the cool templates right away
@@ -23,10 +26,13 @@ const App: React.FC = () => {
   const [adminSnapshot, setAdminSnapshot] = useState<AdminSnapshot | null>(null);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
-  const [adminTab, setAdminTab] = useState<'wall' | 'stats' | 'users'>('wall');
+  const [adminTab, setAdminTab] = useState<'wall' | 'stats' | 'users' | 'help'>('wall');
   const [adminGallery, setAdminGallery] = useState<AdminGalleryPhoto[]>([]);
   const [adminGalleryLoading, setAdminGalleryLoading] = useState(false);
   const [adminGalleryError, setAdminGalleryError] = useState<string | null>(null);
+  const [adminHelp, setAdminHelp] = useState<AdminHelpSummary | null>(null);
+  const [adminHelpLoading, setAdminHelpLoading] = useState(false);
+  const [adminHelpError, setAdminHelpError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const showInfo = useCallback((message: string) => {
@@ -89,14 +95,36 @@ const App: React.FC = () => {
     }
   }, [user]);
 
+  const loadAdminHelp = useCallback(async () => {
+    if (!user?.isAdmin) return;
+    setAdminHelpLoading(true);
+    setAdminHelpError(null);
+    try {
+      const res = await apiService.adminHelp();
+      if (res.success && res.help) {
+        setAdminHelp(res.help);
+      } else {
+        setAdminHelp(null);
+        setAdminHelpError(res.error || 'Unable to load the help brief right now.');
+      }
+    } catch (err) {
+      setAdminHelp(null);
+      setAdminHelpError('Unable to load the help brief right now.');
+    } finally {
+      setAdminHelpLoading(false);
+    }
+  }, [user]);
+
   const refreshAdminView = useCallback(() => {
     if (!user?.isAdmin) return;
     if (adminTab === 'wall') {
       void loadAdminGallery();
+    } else if (adminTab === 'help') {
+      void loadAdminHelp();
     } else {
       void loadAdminSnapshot();
     }
-  }, [user, adminTab, loadAdminGallery, loadAdminSnapshot]);
+  }, [user, adminTab, loadAdminGallery, loadAdminHelp, loadAdminSnapshot]);
 
   const handleAdminDeleteUser = useCallback(async (targetId: number) => {
     if (!user?.isAdmin) return;
@@ -144,13 +172,22 @@ const App: React.FC = () => {
 
   // Let's check if we already know who this is
   useEffect(() => {
-    const cached = localStorage.getItem('spooky_booth_user');
+    let cached = localStorage.getItem(SESSION_KEY);
+    let migrated = false;
+    if (!cached) {
+      cached = localStorage.getItem(LEGACY_SESSION_KEY);
+      migrated = Boolean(cached);
+    }
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
         setUser(parsed);
         setIsGuest(false);
         refreshVault(parsed.id);
+        if (migrated) {
+          localStorage.setItem(SESSION_KEY, cached);
+          localStorage.removeItem(LEGACY_SESSION_KEY);
+        }
       } catch (e) {
         console.error("Corrupt session data found.");
       }
@@ -165,11 +202,13 @@ const App: React.FC = () => {
       }
       if (adminTab === 'wall') {
         void loadAdminGallery();
+      } else if (adminTab === 'help') {
+        void loadAdminHelp();
       } else {
         void loadAdminSnapshot();
       }
     }
-  }, [view, user, adminTab, loadAdminSnapshot, loadAdminGallery]);
+  }, [view, user, adminTab, loadAdminSnapshot, loadAdminGallery, loadAdminHelp]);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,7 +225,11 @@ const App: React.FC = () => {
           setAdminTab('wall');
           setAdminGallery([]);
           setAdminGalleryError(null);
-          localStorage.setItem('spooky_booth_user', JSON.stringify(res.user));
+          setAdminHelp(null);
+          setAdminHelpError(null);
+          setAdminHelpLoading(false);
+          localStorage.setItem(SESSION_KEY, JSON.stringify(res.user));
+          localStorage.removeItem(LEGACY_SESSION_KEY);
           await refreshVault(res.user.id);
           if (pendingImage) {
             const photo: SavedPhoto = { id: Date.now().toString(), url: pendingImage, timestamp: Date.now() };
@@ -221,12 +264,17 @@ const App: React.FC = () => {
     soundService.play('ghost');
     setUser(null);
     setIsGuest(true);
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(LEGACY_SESSION_KEY);
     setAdminSnapshot(null);
     setAdminError(null);
     setAdminLoading(false);
     setAdminTab('wall');
     setAdminGallery([]);
     setAdminGalleryError(null);
+    setAdminHelp(null);
+    setAdminHelpError(null);
+    setAdminHelpLoading(false);
     setAdminGalleryLoading(false);
     setView(AppView.HOME);
   };
@@ -235,7 +283,8 @@ const App: React.FC = () => {
     soundService.play('ghost');
     setUser(null);
     setIsGuest(true);
-    localStorage.removeItem('spooky_booth_user');
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(LEGACY_SESSION_KEY);
     setGallery([]);
     setAdminSnapshot(null);
     setAdminError(null);
@@ -244,6 +293,9 @@ const App: React.FC = () => {
     setAdminGallery([]);
     setAdminGalleryError(null);
     setAdminGalleryLoading(false);
+    setAdminHelp(null);
+    setAdminHelpError(null);
+    setAdminHelpLoading(false);
     setView(AppView.HOME);
   };
 
@@ -332,7 +384,7 @@ const App: React.FC = () => {
   const openVault = useCallback(() => {
     if (!user) {
       soundService.play('pop');
-      showInfo('Sign in to unlock your spooky vault.');
+      showInfo('Sign in to unlock your Chinggus vault.');
       setView(AppView.AUTH);
       return;
     }
@@ -346,7 +398,7 @@ const App: React.FC = () => {
     setView(AppView.HOME);
   }, []);
 
-  const openAdmin = useCallback((nextTab: 'wall' | 'stats' | 'users') => {
+  const openAdmin = useCallback((nextTab: 'wall' | 'stats' | 'users' | 'help') => {
     if (!user?.isAdmin) return;
     soundService.play('pop');
     setAdminTab(nextTab);
@@ -397,6 +449,13 @@ const App: React.FC = () => {
           active: view === AppView.ADMIN && adminTab === 'users',
           onClick: () => openAdmin('users'),
           badge: adminSnapshot?.users.length
+        },
+        {
+          key: 'admin-help',
+          label: 'Help Brief',
+          icon: '📝',
+          active: view === AppView.ADMIN && adminTab === 'help',
+          onClick: () => openAdmin('help')
         }
       );
     }
@@ -480,16 +539,16 @@ const App: React.FC = () => {
       {/* Main Home Screen with Templates */}
       {view === AppView.HOME && (
         <div className="flex flex-col items-center gap-12 py-8 animate-fadeIn">
-          <div className="text-center">
-            <h2 className="text-5xl md:text-7xl font-halloween text-orange-400 drop-shadow-[0_10px_15px_rgba(249,115,22,0.3)] uppercase">
-              Spooky BOOTH
+            <div className="text-center">
+              <h2 className="text-5xl md:text-7xl font-halloween heading-main text-orange-400 drop-shadow-[0_10px_15px_rgba(249,115,22,0.3)] uppercase">
+              Chinggus
             </h2>
             <p className="text-purple-300/40 text-sm font-bold uppercase tracking-[0.4em] mt-3">
               Capture your magical moments
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-5 sm:gap-4 w-full max-w-4xl px-3 sm:px-6 mx-auto justify-items-center">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-3 gap-y-5 sm:gap-4 w-full max-w-5xl px-3 sm:px-6 mx-auto justify-items-center">
             {TEMPLATES.map((t) => (
               <button
                 key={t.id}
@@ -596,8 +655,22 @@ const App: React.FC = () => {
           mode={adminTab}
           snapshot={adminSnapshot}
           gallery={adminGallery}
-          loading={adminTab === 'wall' ? adminGalleryLoading : adminLoading}
-          error={adminTab === 'wall' ? adminGalleryError : adminError}
+          help={adminHelp}
+          loading={
+            adminTab === 'wall'
+              ? adminGalleryLoading
+              : adminTab === 'help'
+                ? adminHelpLoading
+                : adminLoading
+          }
+          error={
+            adminTab === 'wall'
+              ? adminGalleryError
+              : adminTab === 'help'
+                ? adminHelpError
+                : adminError
+          }
+          helpError={adminHelpError}
           onRefresh={refreshAdminView}
           onDeleteUser={handleAdminDeleteUser}
           onToggleAdmin={handleAdminToggleRole}

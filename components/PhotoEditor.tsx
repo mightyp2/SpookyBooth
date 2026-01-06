@@ -443,7 +443,7 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
     <div className="relative flex flex-col gap-8 animate-fadeIn pb-20 overflow-hidden min-h-[80vh]">
       <div className="z-10 flex flex-col lg:flex-row gap-6 sm:gap-8 items-start justify-center">
         {/* Editor Preview Area */}
-        <div className="w-full max-w-lg flex flex-col gap-5 sm:gap-6">
+        <div className="w-full max-w-md flex flex-col gap-5 sm:gap-6">
           <div className="flex items-center justify-between px-5 py-3 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md">
             <div className="flex items-center gap-3">
               <span className="text-xl">{template.icon}</span>
@@ -462,12 +462,12 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ images, template, isGuest, on
             onPointerMove={onStickerMove}
             onPointerUp={onStickerUp}
             onPointerLeave={onStickerUp}
-            className="relative rounded-[2rem] sm:rounded-[3rem] overflow-hidden shadow-2xl bg-[#0c0a1f] border-[8px] sm:border-[10px] border-white/5 p-3 sm:p-4 select-none"
+            className="relative flex items-center justify-center rounded-[2rem] sm:rounded-[3rem] overflow-hidden shadow-2xl bg-[#0c0a1f] border-[8px] sm:border-[10px] border-white/5 p-3 sm:p-4 select-none min-h-[320px]"
           >
             {collageImage && (
               <img 
                 src={collageImage} 
-                className="w-full h-auto rounded-xl sm:rounded-2xl transition-all select-none"
+                className="w-full max-h-[540px] object-contain rounded-xl sm:rounded-2xl transition-all select-none"
                 style={{ filter: filterStyles[filter] }}
                 onPointerDown={() => setSelectedStickerId(null)}
                 onContextMenu={(e) => { e.preventDefault(); onPopup?.("Nice try, sneaky ghost! 👻"); }}

@@ -95,10 +95,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLo
           <span className="text-2xl sm:text-3xl animate-spooky-sway inline-block">🎃</span>
           <button
             onClick={onHomeClick || onLoginClick}
-            className="text-lg sm:text-3xl font-halloween text-orange-500 drop-shadow-[0_0_15px_rgba(249,115,22,0.4)] tracking-tighter leading-tight text-left"
+            className="text-lg sm:text-3xl font-halloween heading-main text-orange-500 drop-shadow-[0_0_15px_rgba(249,115,22,0.4)] tracking-tighter leading-tight text-left"
             title="Back to home"
           >
-            SPOOKY <span className="text-purple-400">BOOTH</span>
+            CHINGGUS
           </button>
         </div>
 
@@ -183,7 +183,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, isGuest, onLogout, onLo
       <footer className="p-8 text-center relative z-10 mt-auto">
         <div className="w-full h-px bg-gradient-to-r from-transparent via-purple-900/30 to-transparent mb-6"></div>
         <p className="text-xs text-purple-400/30 font-bold uppercase tracking-[0.3em]">
-          © 2026 Spooky BOOTH • Happy New Year 2026 🎉
+          © 2026 Chinggus • Happy New Year 2026 🎉
         </p>
       </footer>
     </div>

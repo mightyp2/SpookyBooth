@@ -1,13 +1,15 @@
 import React from 'react';
-import { AdminGalleryPhoto, AdminSnapshot } from '../types';
+import { AdminGalleryPhoto, AdminHelpSummary, AdminSnapshot } from '../types';
 import { soundService } from '../services/soundService';
 
 interface AdminPanelProps {
-  mode: 'wall' | 'stats' | 'users';
+  mode: 'wall' | 'stats' | 'users' | 'help';
   snapshot: AdminSnapshot | null;
   gallery?: AdminGalleryPhoto[];
+  help?: AdminHelpSummary | null;
   loading: boolean;
   error?: string | null;
+  helpError?: string | null;
   onRefresh: () => void | Promise<void>;
   onDeleteUser: (userId: number) => void | Promise<void>;
   onToggleAdmin: (userId: number, nextValue: boolean) => void | Promise<void>;
@@ -18,8 +20,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   mode,
   snapshot,
   gallery,
+  help,
   loading,
   error,
+  helpError,
   onRefresh,
   onDeleteUser,
   onToggleAdmin,
@@ -29,6 +33,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const users = snapshot?.users ?? [];
   const recent = snapshot?.recent ?? [];
   const wallItems = gallery ?? [];
+  const helpContent = help ?? snapshot?.help ?? null;
+  const activeError = mode === 'help' ? helpError ?? error : error;
+  const helpSections = helpContent
+    ? [
+        { title: 'Technologies', items: helpContent.technologies },
+        { title: 'Frontend Libraries', items: helpContent.frontendLibraries },
+        { title: 'Backend Stack', items: helpContent.backendStack },
+        { title: 'Tooling', items: helpContent.tooling },
+        { title: 'Fonts', items: helpContent.fonts },
+        { title: 'Highlights', items: helpContent.highlights },
+        { title: 'Roadmap', items: helpContent.roadmap }
+      ]
+    : [];
 
   const formatDate = (value: number | null) => {
     if (!value) return '—';
@@ -68,7 +85,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const subtitle = {
     wall: 'Celebrate every spooky strip ever saved',
     stats: 'See raw booth metrics without the fluff',
-    users: 'Promote, demote, or purge members with care'
+    users: 'Promote, demote, or purge members with care',
+    help: 'Present the story, stack, and future roadmap'
   }[mode];
 
   return (
@@ -76,7 +94,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-halloween text-orange-400 uppercase tracking-tight">
-            {mode === 'wall' ? 'Wall of Fame' : mode === 'stats' ? 'Live Stats' : 'User Management'}
+            {mode === 'wall'
+              ? 'Wall of Fame'
+              : mode === 'stats'
+                ? 'Live Stats'
+                : mode === 'users'
+                  ? 'User Management'
+                  : 'Help Brief'}
           </h2>
           <p className="text-xs text-purple-200/40 uppercase tracking-[0.45em]">{subtitle}</p>
         </div>
@@ -91,9 +115,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       </div>
 
-      {error && (
+      {activeError && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-200 text-sm px-4 py-3 rounded-2xl">
-          {error}
+          {activeError}
         </div>
       )}
 
@@ -102,14 +126,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           {loading && !wallItems.length ? (
             <p className="text-sm text-white/50">Loading the wall...</p>
           ) : wallItems.length ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
               {wallItems.map((item) => (
-                <article key={item.id} className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5">
-                  <img src={item.url} alt={item.username} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" />
-                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 text-white text-[11px] uppercase tracking-[0.35em]">
-                    <span className="font-semibold">{item.username}</span>
-                    <span className="text-white/60">{formatDuration(item.timestamp)}</span>
-                    <span className="text-white/40">#{item.id}</span>
+                <article key={item.id} className="group relative rounded-3xl border border-white/10 bg-white/5 p-4 flex flex-col gap-3">
+                  <div className="relative w-full aspect-[3/7] min-h-[220px] rounded-2xl bg-black/40 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={item.url}
+                      alt={item.username}
+                      className="h-full w-full max-h-[320px] object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                    />
+                    <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 text-white text-[11px] uppercase tracking-[0.35em]">
+                      <span className="font-semibold">{item.username}</span>
+                      <span className="text-white/60">{formatDuration(item.timestamp)}</span>
+                      <span className="text-white/40">#{item.id}</span>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -291,6 +321,52 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               </tbody>
             </table>
           </div>
+        </section>
+      )}
+
+      {mode === 'help' && (
+        <section className="bg-black/50 border border-white/10 rounded-3xl p-6 backdrop-blur-sm flex flex-col gap-8">
+          {loading ? (
+            <p className="text-sm text-white/50">Loading help brief...</p>
+          ) : helpContent ? (
+            <>
+              <div className="flex flex-col lg:flex-row lg:items-baseline lg:justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-halloween text-orange-300 uppercase">{helpContent.projectName || 'Project Overview'}</h3>
+                  {helpContent.pitch && (
+                    <p className="mt-2 max-w-2xl text-sm text-white/70 leading-relaxed">{helpContent.pitch}</p>
+                  )}
+                </div>
+                <button
+                  onClick={handleRefresh}
+                  className="self-start lg:self-center px-4 py-2 rounded-full border border-white/15 text-[10px] uppercase tracking-[0.35em] text-white/60 hover:text-white hover:border-white/40 transition-all"
+                >
+                  Refresh Help
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {helpSections.map(({ title, items }) => (
+                  <div key={title} className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                    <h4 className="text-sm font-halloween text-orange-200 uppercase mb-3">{title}</h4>
+                    {items.length ? (
+                      <ul className="space-y-2 text-[13px] text-white/70">
+                        {items.map((item, index) => (
+                          <li key={`${title}-${index}`} className="flex items-start gap-2">
+                            <span className="text-orange-400 mt-0.5">•</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-white/30">No details provided.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-white/40">No help content configured yet.</p>
+          )}
         </section>
       )}
     </div>

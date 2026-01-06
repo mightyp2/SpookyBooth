@@ -108,6 +108,59 @@ try {
             json_response(['success' => true, 'photos' => $all]);
             break;
 
+        case 'admin_help':
+            $help = [
+                'projectName' => 'Chinggus: Digital Photobooth Experience',
+                'pitch' => 'Capture themed photo strips with instant editing, gamified stats, and admin controls for live events.',
+                'technologies' => [
+                    'React 18',
+                    'Vite build tooling',
+                    'TypeScript end-to-end',
+                    'Tailwind CSS + custom animation layer',
+                    'PHP 8 REST API',
+                    'SQLite / JSON hybrid storage'
+                ],
+                'frontendLibraries' => [
+                    'React Hooks architecture',
+                    'Custom camera + canvas editor',
+                    'Sound effects service',
+                    'Responsive layout utilities'
+                ],
+                'backendStack' => [
+                    'Slim PHP controller (api.php)',
+                    'SQLite primary persistence with JSON fallback',
+                    'Password hashing + role management',
+                    'REST endpoints for auth, gallery, admin'
+                ],
+                'tooling' => [
+                    'Vite dev server + HMR',
+                    'TypeScript strict mode',
+                    'Tailwind JIT',
+                    'ESBuild bundling',
+                    'NPM scripts for build/test'
+                ],
+                'fonts' => [
+                    'Creepster for headings',
+                    'Nosifer + Metamorphous accents',
+                    'Segoe UI fallback for admin copy'
+                ],
+                'highlights' => [
+                    'Admin wall of fame with full-resolution gallery',
+                    'Live stats dashboard (top creators, recent activity)',
+                    'User role management and secure photo deletion',
+                    'Mobile-first navigation with themed audio feedback',
+                    'Guest capture flow nudging account creation'
+                ],
+                'roadmap' => [
+                    'Add scheduled event presets',
+                    'Integrate sharing to social networks',
+                    'Provide automatic strip printing queue',
+                    'Offer analytics export (CSV/PDF)'
+                ]
+            ];
+            json_response(['success' => true, 'help' => $help]);
+            break;
+
         case 'admin_delete_user':
             $targetId = (int)($body['user_id'] ?? 0);
             if (!$targetId) json_response(['success' => false, 'error' => 'Missing user id']);
